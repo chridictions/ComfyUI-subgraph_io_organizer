@@ -1,6 +1,6 @@
 import pytest
 
-from organizer import _detach, _remap_widget_values, lf, remap, set_slot
+from organizer import SG_IN, SG_OUT, _detach, _remap_widget_values, lf, remap, set_slot
 
 
 def slot(name, link=None, **extra):
@@ -48,8 +48,9 @@ def parent_subgraph():
 
 
 def workflow():
-    """Root graph with list-form links: 100 -> instance 200 of S -> 300."""
+    """Root graph R with list-form links: 100 -> instance 200 of S -> 300."""
     return {
+        "id": "R",
         "nodes": [
             {"id": 100, "type": "Src", "inputs": [], "outputs": [out("o0", [20, 21, 24])]},
             {"id": 200, "type": "S",
@@ -67,6 +68,10 @@ def workflow():
         ],
         "definitions": {"subgraphs": [inner_subgraph(), parent_subgraph(), {"id": "Empty"}]},
     }
+
+
+# Inputs of each instance of S that have a widgetId in the frontend.
+WIDGETS = {"R:200": ["b", "c"], "P:50": []}
 
 
 def links_by_id(g):
@@ -128,25 +133,40 @@ def test_detach_endpoints_not_pointing_at_link():
 
 def test_widget_values_without_values():
     n = {"inputs": [slot("a", widget={})]}
-    _remap_widget_values(n, [0])
+    _remap_widget_values(n, [0], ["a"], set())
     assert "widgets_values" not in n
 
 
 def test_widget_values_length_mismatch_untouched():
     n = {"inputs": [slot("a", widget={})], "widgets_values": [1, 2]}
-    _remap_widget_values(n, [0])
+    _remap_widget_values(n, [0], ["a"], set())
     assert n["widgets_values"] == [1, 2]
 
 
 def test_widget_values_follow_order():
     n = {"inputs": [slot("a"), slot("b", widget={}), slot("c", widget={})], "widgets_values": ["bv", "cv"]}
-    _remap_widget_values(n, [2, 0])
+    _remap_widget_values(n, [2, 0], ["b", "c"], {"b"})
     assert n["widgets_values"] == ["cv"]
+
+
+def test_widget_positions_from_widget_ids_not_flags():
+    # Frontend #18990: "a" keeps its serialized widget flag but has no widgetId, so it has no value.
+    n = {"inputs": [slot("a", widget={}), slot("b", widget={}), slot("c", widget={})], "widgets_values": ["bv", "cv"]}
+    _remap_widget_values(n, [2, 0, 1], ["b", "c"], set())
+    assert n["widgets_values"] == ["cv", "bv"]
+
+
+def test_widgets_values_named_pruned():
+    n = {"inputs": [slot("a", widget={}), slot("b", widget={})], "widgets_values": [1, 2],
+         "widgets_values_named": {"a": 1, "b": 2, "z": 3}}
+    _remap_widget_values(n, [1], ["a", "b"], {"a", "gone"})
+    assert n["widgets_values"] == [2]
+    assert n["widgets_values_named"] == {"b": 2, "z": 3}
 
 
 def test_reorder_inputs():
     wf = workflow()
-    remap(wf, "S", "inputs", [2, 0, 1])
+    remap(wf, "S", "inputs", [2, 0, 1], WIDGETS)
     sg = wf["definitions"]["subgraphs"][0]
     assert [s["name"] for s in sg["inputs"]] == ["c", "a", "b"]
     inner = links_by_id(sg)
@@ -164,7 +184,7 @@ def test_reorder_inputs():
 
 def test_delete_input():
     wf = workflow()
-    remap(wf, "S", "inputs", [0, 2])
+    remap(wf, "S", "inputs", [0, 2], WIDGETS)
     sg = wf["definitions"]["subgraphs"][0]
     assert [s["name"] for s in sg["inputs"]] == ["a", "c"]
     inner = links_by_id(sg)
@@ -204,7 +224,7 @@ def test_delete_output():
 
 def test_nested_instance_with_fewer_inputs_reorder():
     wf = workflow()
-    remap(wf, "S", "inputs", [2, 1, 0])
+    remap(wf, "S", "inputs", [2, 1, 0], WIDGETS)
     p = wf["definitions"]["subgraphs"][1]
     assert [s["name"] for s in node(p, 50)["inputs"]] == ["b"]
     assert links_by_id(p)[60]["target_slot"] == 0
@@ -212,7 +232,7 @@ def test_nested_instance_with_fewer_inputs_reorder():
 
 def test_nested_instance_delete_input():
     wf = workflow()
-    remap(wf, "S", "inputs", [0, 2])
+    remap(wf, "S", "inputs", [0, 2], WIDGETS)
     p = wf["definitions"]["subgraphs"][1]
     assert node(p, 50)["inputs"] == []
     assert p["links"] == []
@@ -235,3 +255,62 @@ def test_instance_names_not_in_definition():
     node(wf, 200)["outputs"].append(out("zz", []))
     with pytest.raises(ValueError, match="Node 200 has outputs"):
         remap(wf, "S", "outputs", [0, 1])
+
+
+def floating(id, origin_id, origin_slot, target_id, target_slot):
+    return dict(id=id, origin_id=origin_id, origin_slot=origin_slot, target_id=target_id, target_slot=target_slot, type="*")
+
+
+def test_floating_links_delete_input():
+    wf = workflow()
+    wf["floatingLinks"] = [floating(1, -1, -1, 200, 1), floating(2, -1, -1, 200, 2), floating(3, 200, 1, -1, -1), floating(4, -1, -1, 300, 0)]
+    sg = wf["definitions"]["subgraphs"][0]
+    sg["floatingLinks"] = [floating(5, SG_IN, 1, -1, -1), floating(6, SG_IN, 2, -1, -1)]
+    remap(wf, "S", "inputs", [0, 2], WIDGETS)
+    assert wf["floatingLinks"] == [floating(2, -1, -1, 200, 1), floating(3, 200, 1, -1, -1), floating(4, -1, -1, 300, 0)]
+    assert sg["floatingLinks"] == [floating(6, SG_IN, 1, -1, -1)]
+
+
+def test_floating_links_delete_output():
+    wf = workflow()
+    wf["floatingLinks"] = [floating(3, 200, 1, -1, -1), floating(7, 200, 0, -1, -1)]
+    sg = wf["definitions"]["subgraphs"][0]
+    # Frontend #12986 writes the output node on the origin side.
+    sg["floatingLinks"] = [floating(8, -1, -1, SG_OUT, 1), floating(9, SG_OUT, 0, -1, -1), floating(10, SG_OUT, 1, -1, -1)]
+    remap(wf, "S", "outputs", [1])
+    assert wf["floatingLinks"] == [floating(3, 200, 0, -1, -1)]
+    assert sg["floatingLinks"] == [floating(8, -1, -1, SG_OUT, 0), floating(10, SG_OUT, 0, -1, -1)]
+
+
+def check_links(g):
+    """Every link is listed on both endpoint slots, the way rgthree's link checker expects."""
+    nodes = {n["id"]: n for n in g.get("nodes", [])}
+    for l in g.get("links", []):
+        f = lf(l)
+        if f["target_id"] not in (SG_IN, SG_OUT):
+            assert nodes[f["target_id"]]["inputs"][f["target_slot"]]["link"] == f["id"]
+        if f["origin_id"] not in (SG_IN, SG_OUT):
+            assert f["id"] in nodes[f["origin_id"]]["outputs"][f["origin_slot"]]["links"]
+
+
+@pytest.mark.parametrize("side, keep", [("inputs", [2, 0, 1]), ("inputs", [0, 2]), ("inputs", [1]), ("outputs", [1, 0]), ("outputs", [0]), ("outputs", [])])
+def test_links_consistent_after_remap(side, keep):
+    wf = workflow()
+    remap(wf, "S", side, keep, WIDGETS)
+    for g in [wf] + wf["definitions"]["subgraphs"]:
+        check_links(g)
+
+
+def test_minus_one_slot_links_deleted():
+    # Corrupt links with slot -1 (frontend #15732) are never in the new order, so they are deleted.
+    wf = workflow()
+    wf["links"].append([99, 100, 0, 200, -1, "*"])
+    node(wf, 100)["outputs"][0]["links"].append(99)
+    sg = wf["definitions"]["subgraphs"][0]
+    sg["links"].append(dict(id=98, origin_id=SG_IN, origin_slot=-1, target_id=1, target_slot=3, type="*"))
+    remap(wf, "S", "inputs", [0, 1, 2], WIDGETS)
+    assert 99 not in links_by_id(wf)
+    assert node(wf, 100)["outputs"][0]["links"] == [20, 21, 24]
+    assert node(wf, 200)["inputs"][2]["link"] is None
+    assert 98 not in links_by_id(sg)
+    assert node(sg, 1)["inputs"][3]["link"] == 15

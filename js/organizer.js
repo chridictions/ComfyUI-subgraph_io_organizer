@@ -66,20 +66,50 @@ function layout(list) {
   return { groups, height: top };
 }
 
+function items(slots, pre, kinds) {
+  return slots.map((s, i) => ({ key: pre + i, name: s.label || s.name, type: String(s.type), orig: i, kind: kinds[i], del: false }));
+}
+
+function kept(list, kind) {
+  return list.filter((x) => !x.del && (!kind || x.kind === kind)).map((x) => x.orig);
+}
+
+// Live instances of the subgraph, in the root graph and inside every subgraph definition.
+function instances(subgraph) {
+  const root = app.rootGraph;
+  return [root, ...root.subgraphs.values()].flatMap((g) => g.nodes.filter((n) => n.type === subgraph.id));
+}
+
+// The frontend's own widget test on a live host. Hosts saved short don't list every input; for
+// those, and when there is no host, ask the definition.
+function kindOf(host, s) {
+  const x = host?.inputs.find((i) => i.name === s.name);
+  return (x ? x.widgetId || x.widget : s.getConnectedWidgets().length) ? "widget" : "socket";
+}
+
 async function applyOrder(subgraph, inputs, outputs) {
+  const workflow = app.extensionManager.workflow.activeWorkflow;
+  // widgets_values positions are counted over the inputs that have a widgetId, per instance.
+  const widgets = Object.fromEntries(instances(subgraph).map((n) => [`${n.graph.id}:${n.id}`, n.inputs.filter((s) => s.widgetId).map((s) => s.name)]));
   const res = await api.fetchApi("/subgraph_io_organizer/apply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workflow: app.rootGraph.serialize(), sg_id: subgraph.id, inputs, outputs }),
+    body: JSON.stringify({ workflow: app.rootGraph.serialize(), sg_id: subgraph.id, inputs, outputs, widgets }),
   });
+  if (!res.ok) {
+    const json = res.headers.get("Content-Type")?.startsWith("application/json");
+    throw new Error((json && (await res.json()).error) || `${res.status} ${res.statusText}`);
+  }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  if (app.extensionManager.workflow.activeWorkflow !== workflow) throw new Error("The workflow tab changed; nothing was applied.");
 
-  const workflow = app.extensionManager.workflow.activeWorkflow;
   const ct = workflow.changeTracker;
   const { initialState, activeState } = ct;
   ct.store();
-  await app.loadGraphData(data, true, false, workflow);
+  const loaded = await app.loadGraphData(data, true, false, workflow);
+  // 1.48.6 resolves undefined even on success. Newer frontends resolve false when they refuse the
+  // load, or undefined when another load superseded it, which leaves a different workflow active.
+  if (loaded === false || app.extensionManager.workflow.activeWorkflow !== workflow) throw new Error("The workflow didn't reload; nothing was applied.");
   // loadGraphData makes the result the new clean baseline; put the old one back so the tab
   // stays modified and Ctrl+Z undoes the whole apply.
   ct.initialState = initialState;
@@ -90,12 +120,11 @@ async function applyOrder(subgraph, inputs, outputs) {
 let current = null;
 
 class Organizer {
-  constructor(subgraph) {
+  constructor(subgraph, host) {
     this.sg = subgraph;
-    const mk = (slots, pre, kind) => slots.map((s, i) => ({ key: pre + i, name: s.label || s.name, type: String(s.type), orig: i, kind: kind(s), del: false }));
-    const inputs = mk(subgraph.inputs, "i", (s) => (s.getConnectedWidgets().length ? "widget" : "socket"));
-    this.kinds = inputs.map((x) => x.kind);
-    this.base = { inputs: [...inputs.filter((x) => x.kind === "socket"), ...inputs.filter((x) => x.kind === "widget")], outputs: mk(subgraph.outputs, "o", () => "socket") };
+    this.kinds = subgraph.inputs.map((s) => kindOf(host, s));
+    const inputs = items(subgraph.inputs, "i", this.kinds);
+    this.base = { inputs: [...inputs.filter((x) => x.kind === "socket"), ...inputs.filter((x) => x.kind === "widget")], outputs: items(subgraph.outputs, "o", subgraph.outputs.map(() => "socket")) };
     this.was = {};
     for (const list of Object.values(this.base))
       for (const kind of ["socket", "widget"]) list.filter((x) => x.kind === kind).forEach((x, j) => (this.was[x.key] = j + 1));
@@ -340,16 +369,15 @@ class Organizer {
   }
 
   async apply() {
-    const keep = (side, kind) => this.lists[side].filter((x) => !x.del && (!kind || x.kind === kind)).map((x) => x.orig);
     // Each kind refills the slot positions it held before, so the socket/widget interleave of the
     // definition is kept and only the order within each kind changes.
-    const q = { socket: keep("inputs", "socket"), widget: keep("inputs", "widget") };
+    const q = { socket: kept(this.lists.inputs, "socket"), widget: kept(this.lists.inputs, "widget") };
     const inputs = this.kinds.map((k) => q[k].shift()).filter((o) => o !== undefined);
     const a = stats(this.lists.inputs), b = stats(this.lists.outputs);
     this.busy = true;
     this.updateFooter();
     try {
-      await applyOrder(this.sg, inputs, keep("outputs"));
+      await applyOrder(this.sg, inputs, kept(this.lists.outputs));
     } catch (err) {
       this.busy = false;
       this.flash = `Apply failed: ${err.message}`;
@@ -361,16 +389,17 @@ class Organizer {
   }
 }
 
-function open(subgraph) {
-  if (!current) new Organizer(subgraph).open();
+// host: the instance the dialog was opened from, else any instance.
+function open(subgraph, host = instances(subgraph)[0]) {
+  if (!current) new Organizer(subgraph, host).open();
 }
 
 // The selected subgraph node wins; otherwise the subgraph currently open on the canvas.
 function target() {
   const node = Object.values(app.canvas.selected_nodes ?? {}).find((n) => n.isSubgraphNode?.());
-  if (node) return node.subgraph;
+  if (node) return [node.subgraph, node];
   const g = app.canvas.graph;
-  return g && !g.isRootGraph ? g : null;
+  return g && !g.isRootGraph ? [g] : [];
 }
 
 app.registerExtension({
@@ -379,15 +408,15 @@ app.registerExtension({
     id: "SubgraphIOOrganizer.open",
     label: "Subgraph IO Organizer",
     function: () => {
-      const sg = target();
-      if (sg) open(sg);
+      const [sg, node] = target();
+      if (sg) open(sg, node);
       else app.extensionManager.toast.add({ severity: "info", summary: "Subgraph IO Organizer", detail: "Select a subgraph node or open a subgraph first.", life: 3000 });
     },
   }],
   keybindings: [{ combo: { key: "r", alt: true }, commandId: "SubgraphIOOrganizer.open" }],
   menuCommands: [{ path: ["Extensions"], commands: ["SubgraphIOOrganizer.open"] }],
   getNodeMenuItems(node) {
-    return node.isSubgraphNode?.() ? [{ content: "Subgraph IO Organizer…", callback: () => open(node.subgraph) }] : [];
+    return node.isSubgraphNode?.() ? [{ content: "Subgraph IO Organizer…", callback: () => open(node.subgraph, node) }] : [];
   },
   getCanvasMenuItems(canvas) {
     const g = canvas.graph;

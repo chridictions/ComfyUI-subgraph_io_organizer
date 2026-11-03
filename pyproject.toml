@@ -14,4 +14,4 @@ Issues = "https://github.com/chridictions/ComfyUI-subgraph_io_organizer/issues"
 [tool.comfy]
 PublisherId = "chridictions"
 DisplayName = "Subgraph IO Organizer"
-requires-comfyui = ">=0.30.0"
+requires-comfyui = ">=0.31.0"

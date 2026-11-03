@@ -9,11 +9,12 @@ NODE_CLASS_MAPPINGS = {}
 
 @PromptServer.instance.routes.post("/subgraph_io_organizer/apply")
 async def apply(request):
-    body = await request.json()
-    wf = body["workflow"]
+    # KeyError, IndexError and TypeError come from a malformed request or workflow.
     try:
-        remap(wf, body["sg_id"], "inputs", body["inputs"])
+        body = await request.json()
+        wf = body["workflow"]
+        remap(wf, body["sg_id"], "inputs", body["inputs"], body["widgets"])
         remap(wf, body["sg_id"], "outputs", body["outputs"])
-    except ValueError as e:
+    except (ValueError, KeyError, IndexError, TypeError) as e:
         return web.json_response({"error": str(e)}, status=400)
     return web.json_response(wf)

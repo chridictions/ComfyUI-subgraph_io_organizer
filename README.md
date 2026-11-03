@@ -50,6 +50,8 @@ It also works from the keyboard. Click or Tab to a label, press **Alt+↑/↓** 
 
 ComfyUI always draws connection ports above widgets on a subgraph node, whatever their internal order. The organizer shows them as two groups, so what you see in the dialog is what you get on the node. Each group reorders within itself.
 
+Reordering outputs changes which inputs a bypassed instance passes through, because ComfyUI pairs them by position.
+
 ## Install
 
 **ComfyUI Manager:** search for **Subgraph IO Organizer** and install it.
@@ -71,7 +73,12 @@ Restart ComfyUI, then hard-refresh your browser.
 
 ## Requirements
 
-ComfyUI 0.30.0 or newer with frontend 1.48.6 or newer. The extension was built against those versions, and subgraph internals can change between frontend releases. If a newer version misbehaves, please [open an issue](https://github.com/chridictions/ComfyUI-subgraph_io_organizer/issues).
+ComfyUI 0.31.0 or newer with frontend 1.48.6 or newer. The extension was built against those versions, and subgraph internals can change between frontend releases. If a newer version misbehaves, please [open an issue](https://github.com/chridictions/ComfyUI-subgraph_io_organizer/issues).
+
+Apply reloads the workflow, which affects some other packs:
+
+- **Impact Pack:** use a version released after 2026-10-29. Older versions can rewire Switch nodes when the workflow reloads.
+- **rgthree:** choosing **Fix in place** after Apply resets the undo history, so **Ctrl+Z** can't revert the Apply.
 
 ## How it works
 
