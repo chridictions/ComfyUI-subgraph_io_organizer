@@ -1,0 +1,17 @@
+[project]
+name = "subgraph-io-organizer"
+description = "Rearrange ComfyUI subgraph inputs, outputs and promoted widgets by drag and drop. Every instance updates, links stay connected and widget values stay put."
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = ["comfyui-frontend-package>=1.48.6"]
+classifiers = ["Operating System :: OS Independent"]
+
+[project.urls]
+Repository = "https://github.com/chridictions/ComfyUI-subgraph_io_organizer"
+Documentation = "https://github.com/chridictions/ComfyUI-subgraph_io_organizer#readme"
+Issues = "https://github.com/chridictions/ComfyUI-subgraph_io_organizer/issues"
+
+[tool.comfy]
+PublisherId = "chridictions"
+DisplayName = "Subgraph IO Organizer"
+requires-comfyui = ">=0.30.0"

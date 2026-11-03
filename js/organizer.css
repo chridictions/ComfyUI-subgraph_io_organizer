@@ -1,0 +1,100 @@
+/* Subgraph IO Organizer: Comfy Native v3. All classes are prefixed sio- to stay out of ComfyUI's own styles. */
+.sio-overlay{position:fixed;inset:0;z-index:2000;display:flex;justify-content:center;align-items:flex-start;padding-top:12vh;background:rgba(0,0,0,.5);font-family:Inter,system-ui,sans-serif;color:#e4e4e4}
+.sio-dialog{width:600px;max-width:calc(100vw - 32px);background:#262626;border:1px solid #3d3d3d;border-radius:10px;box-shadow:0 18px 50px rgba(0,0,0,.55);overflow:hidden;user-select:none;outline:none}
+.sio-dialog.sio-dragging{cursor:grabbing}
+.sio-dialog button{font:inherit}
+
+.sio-header{display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 8px 0 16px;border-bottom:1px solid #3d3d3d}
+.sio-title{font-size:14px;font-weight:600}
+.sio-sub{font-size:12px;color:#a3a3a3;margin-left:10px}
+.sio-close{width:32px;height:32px;border:0;border-radius:6px;background:transparent;color:#bdbdbd;display:grid;place-items:center;cursor:pointer}
+.sio-close:hover{background:#333333}
+
+.sio-cols{display:grid;grid-template-columns:1fr 1fr;background:#2e2e2e;border-bottom:1px solid #3d3d3d;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#bcbcbc}
+.sio-cols>div{padding:10px 16px}
+.sio-cols>div+div{text-align:right;border-left:1px solid #3d3d3d}
+.sio-count{color:#a8a8a8;margin-left:6px}
+
+.sio-viewport{position:relative}
+.sio-body{position:relative;max-height:320px;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#555555 transparent}
+.sio-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding:8px 0}
+.sio-col{position:relative;min-width:0}
+.sio-col.sio-out{border-left:1px solid #3d3d3d}
+
+.sio-row{position:relative;height:40px;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:0 8px 0 12px;transition:opacity .12s}
+.sio-out .sio-row{flex-direction:row-reverse;padding:0 12px 0 8px}
+
+.sio-label{position:relative;flex:1;min-width:0;height:28px;box-sizing:border-box;display:flex;align-items:center;padding:0 10px;border-radius:6px;background:#333333;border:1px solid #444444;color:#e4e4e4;font-size:13px;text-align:left;cursor:grab;touch-action:none;outline:none}
+.sio-label:hover{background:#3a3a3a;border-color:#6a6a6a}
+/* Selection is focus: a click and Tab give the same look, and clicking off a label deselects it. */
+.sio-label:focus{background:#2c3a63;border-color:#6b8afd;outline:2px solid #6b8afd;outline-offset:2px}
+.sio-label:focus:hover{background:#34447a}
+.sio-label.sio-del,.sio-label.sio-del:hover{background:#2c2424;border-color:transparent}
+.sio-label.sio-del:focus{border-color:#6b8afd}
+.sio-label.sio-ph{background:rgba(107,138,253,.08);border-color:transparent;outline:none}
+.sio-dash{position:absolute;inset:-1px;width:calc(100% + 2px);height:calc(100% + 2px);overflow:hidden;pointer-events:none;display:none}
+.sio-dash rect{fill:none;stroke-width:2;stroke-dasharray:3 4}
+.sio-del .sio-dash{display:block}
+.sio-del .sio-dash rect{stroke:#7a4141}
+.sio-del:focus .sio-dash{display:none}
+.sio-ph .sio-dash{display:block}
+.sio-ph .sio-dash rect{stroke:#6b8afd}
+
+.sio-inner{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.sio-out .sio-inner{flex-direction:row-reverse}
+.sio-ph .sio-inner{visibility:hidden}
+.sio-n{flex:none;min-width:14px;font-size:11px;color:#b0b0b0}
+.sio-icon{flex:none;display:grid;place-items:center;color:#9a9a9a}
+.sio-label:focus .sio-icon{color:#c9d4ff}
+
+/* Kind groups: connections above widgets, as the node draws them. Rows only move within their group. */
+.sio-ghead{height:28px;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:4px 12px 0;font-size:11px;color:#9a9a9a;white-space:nowrap;overflow:hidden}
+.sio-out .sio-ghead{flex-direction:row-reverse}
+.sio-ghead b{font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#cfcfcf}
+.sio-grp+.sio-grp .sio-ghead{border-top:1px solid #3d3d3d}
+.sio-locked .sio-row{opacity:.35}
+.sio-locked .sio-ghead{color:#c9a3a3}
+.sio-locked .sio-icon{color:#c9a3a3}
+.sio-out .sio-n{text-align:right}
+.sio-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sio-del .sio-name{text-decoration:line-through;color:#c9a3a3}
+.sio-type{flex:none;font-size:11px;letter-spacing:.04em;color:#b4b4b4}
+.sio-badge{flex:none;margin-left:auto;font-size:11px}
+.sio-out .sio-badge{margin-left:0;margin-right:auto}
+.sio-was{color:#f0b35a}
+.sio-rm{color:#ff8a80}
+
+.sio-x{flex:none;width:28px;height:28px;padding:0;border:0;border-radius:6px;background:transparent;color:#a8a8a8;display:grid;place-items:center;cursor:pointer}
+.sio-x:hover{background:#333333;color:#e4e4e4}
+
+/* Ghosting: while a label is hovered or selected, the other rows step back. */
+.sio-grid:has(.sio-label:hover) .sio-row:not(:has(.sio-label:hover)),
+.sio-grid:not(:has(.sio-label:hover)):has(.sio-label:focus) .sio-row:not(:has(.sio-label:focus)),
+.sio-dragging .sio-grp:not(.sio-locked) .sio-row:not(:has(.sio-ph)){opacity:.7}
+.sio-dragging .sio-label:hover{background:#333333;border-color:#444444}
+
+.sio-float{position:absolute;z-index:5;height:28px;box-sizing:border-box;min-width:210px;width:max-content;max-width:536px;display:flex;align-items:center;gap:8px;padding:0 10px;background:#474747;border:1px solid #6b8afd;border-radius:6px;box-shadow:0 10px 24px rgba(0,0,0,.6);font-size:13px;color:#ffffff;pointer-events:none;left:12px}
+.sio-out .sio-float{left:auto;right:12px;flex-direction:row-reverse}
+
+.sio-end{position:absolute;left:12px;right:42px;display:flex;align-items:center;gap:8px;font-size:11px;color:#8a8a8a;pointer-events:none}
+.sio-out .sio-end{left:42px;right:12px}
+.sio-end span{flex:1;border-top:1px dashed #4a4a4a}
+
+.sio-fade,.sio-auto{position:absolute;left:0;right:0;z-index:6;pointer-events:none}
+.sio-fade{height:22px}
+.sio-fade.sio-up{top:0;background:linear-gradient(#262626,rgba(38,38,38,0))}
+.sio-fade.sio-down{bottom:0;background:linear-gradient(rgba(38,38,38,0),#262626)}
+.sio-auto{height:36px;display:flex;justify-content:center;box-sizing:border-box;color:#dfe6ff}
+.sio-auto.sio-up{top:0;padding-top:4px;background:linear-gradient(rgba(59,111,245,.4),rgba(59,111,245,0))}
+.sio-auto.sio-down{bottom:0;align-items:flex-end;padding-bottom:4px;background:linear-gradient(rgba(59,111,245,0),rgba(59,111,245,.4))}
+.sio-fade[hidden],.sio-auto[hidden]{display:none}
+
+.sio-footer{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid #3d3d3d;background:#222222}
+.sio-sum{flex:1;min-width:0;font-size:12px;color:#a8a8a8}
+.sio-sum.sio-changed{color:#f0b35a}
+.sio-sum.sio-error{color:#ff8a80}
+.sio-btn{height:32px;padding:0 14px;border-radius:6px;border:1px solid #474747;background:#303030;color:#e4e4e4;font-size:13px;cursor:pointer}
+.sio-btn:hover:not(:disabled){background:#3a3a3a}
+.sio-btn.sio-primary{border-color:#3b6ff5;background:#3b6ff5;color:#ffffff}
+.sio-btn.sio-primary:hover:not(:disabled){background:#4a7bf7}
+.sio-btn:disabled{opacity:.45;cursor:default}
