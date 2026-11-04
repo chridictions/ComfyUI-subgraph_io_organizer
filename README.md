@@ -77,7 +77,7 @@ ComfyUI 0.31.0 or newer with frontend 1.48.6 or newer. The extension was built a
 
 Apply reloads the workflow, which affects some other packs:
 
-- **Impact Pack:** use a version released after 2026-10-29. Older versions can rewire Switch nodes when the workflow reloads.
+- **Impact Pack:** use version 8.29 or newer. Older versions can rewire Switch nodes when the workflow reloads.
 - **rgthree:** choosing **Fix in place** after Apply resets the undo history, so **Ctrl+Z** can't revert the Apply.
 
 ## How it works
