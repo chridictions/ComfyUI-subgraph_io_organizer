@@ -2,3 +2,5 @@ __pycache__/
 doc/
 reports/
 research_notes/
+tests/
+.coveragerc
